@@ -10,6 +10,9 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/member.hpp>
 
+#include <vector>
+#include <chrono>
+
 #define BITS 256
 
 /* utilstrencodings.cpp */
@@ -183,7 +186,7 @@ typedef struct notarized_checkpoint t_notarized_checkpoint;
 char ASSETCHAINS_SYMBOL[] = {0};
 // char ASSETCHAINS_SYMBOL[] = {'M','C','L', 0}
 
-typedef boost::multi_index::multi_index_container<
+/* typedef boost::multi_index::multi_index_container<
         notarized_checkpoint,
         boost::multi_index::indexed_by<
                 boost::multi_index::sequenced<>, // sorted by insertion order
@@ -197,7 +200,7 @@ typedef boost::multi_index::multi_index_container<
                                 notarized_checkpoint, int32_t, &notarized_checkpoint::notarized_height
                         >
                 > // sorted by notarized_height
-        > > notarized_checkpoint_container;
+        > > notarized_checkpoint_container; */
 
 namespace old_space {
 
@@ -375,8 +378,10 @@ namespace new_space {
             struct komodo_event **Komodo_events; int32_t Komodo_numevents;
             uint32_t RTbufs[64][3]; uint64_t RTmask;
 
-        //protected:
-            notarized_checkpoint_container NPOINTS; // collection of notarizations
+        protected:
+            void clear_checkpoints(); // for tests only
+            std::vector<notarized_checkpoint> NPOINTS; // collection of notarizations
+            mutable size_t NPOINTS_last_index = 0; // caches checkpoint linear search position
             notarized_checkpoint last;
 
         public:
@@ -412,16 +417,51 @@ namespace new_space {
              */
             int32_t NotarizedData(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp) const
             {
-                // get the nearest height without going over
-                auto &idx = NPOINTS.get<1>(); // sorted by nHeight
-                auto itr = idx.upper_bound(nHeight);
-                if (itr != idx.begin())
-                    --itr;
-                if ( itr != idx.end() && (*itr).nHeight < nHeight )
+                bool found = false;
+
+                if ( NPOINTS.size() > 0 )
                 {
-                    *notarized_hashp = itr->notarized_hash;
-                    *notarized_desttxidp = itr->notarized_desttxid;
-                    return itr->notarized_height;
+                    const notarized_checkpoint* np = nullptr;
+                    if ( NPOINTS_last_index < NPOINTS.size() && NPOINTS_last_index > 0 ) // if we cached an NPOINT index
+                    {
+                        np = &NPOINTS[NPOINTS_last_index-1]; // grab the previous
+                        if ( np->nHeight < nHeight ) // if that previous is below the height we are looking for
+                        {
+                            for (size_t i = NPOINTS_last_index; i < NPOINTS.size(); i++) // move forward
+                            {
+                                if ( NPOINTS[i].nHeight >= nHeight ) // if we found the height we are looking for (or beyond)
+                                {
+                                    found = true; // notify ourselves we were here
+                                    break; // get out
+                                }
+                                np = &NPOINTS[i];
+                                NPOINTS_last_index = i;
+                            }
+                        }
+                    }
+                    if ( !found ) // we still haven't found what we were looking for
+                    {
+                        np = nullptr; // reset
+                        for (size_t i = 0; i < NPOINTS.size(); i++) // linear search from the start
+                        {
+                            if ( NPOINTS[i].nHeight >= nHeight )
+                            {
+                                found = true;
+                                break;
+                            }
+                            np = &NPOINTS[i];
+                            NPOINTS_last_index = i;
+                        }
+                    }
+                    if ( np != nullptr )
+                    {
+                        if ( np->nHeight >= nHeight || (found && np[1].nHeight < nHeight) )
+                            printf("warning: flag.%d i.%ld np->ht %d [1].ht %d >= nHeight.%d\n",
+                                    (int)found,NPOINTS_last_index,np->nHeight,np[1].nHeight,nHeight);
+                        *notarized_hashp = np->notarized_hash;
+                        *notarized_desttxidp = np->notarized_desttxid;
+                        return(np->notarized_height);
+                    }
                 }
                 memset(notarized_hashp,0,sizeof(*notarized_hashp));
                 memset(notarized_desttxidp,0,sizeof(*notarized_desttxidp));
@@ -435,10 +475,9 @@ namespace new_space {
              * @param[out] txidp the DESTTXID
              * @returns the notarized height
              */
-
-            /* int32_t NotarizedHeight(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp)
+            int32_t NotarizedHeight(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp)
             {
-                CBlockIndex *pindex;
+                /* CBlockIndex *pindex;
                 if ( (pindex= komodo_blockindex(last.notarized_hash)) == 0 || pindex->GetHeight() < 0 )
                 {
                     // found orphaned notarization, adjust the values in the komodo_state object
@@ -446,14 +485,17 @@ namespace new_space {
                     last.notarized_desttxid.SetNull();
                     last.notarized_height = 0;
                 }
-                else
+                else */
+
+                // for test purposes we will count that the nota is not orphaned, i.e. all checks above passed
                 {
                     *hashp = last.notarized_hash;
                     *txidp = last.notarized_desttxid;
                     *prevMoMheightp = PrevMoMHeight();
                 }
                 return last.notarized_height;
-            } */
+            }
+
 
             /****
              * Search for the last (chronological) MoM notarized height
@@ -467,14 +509,11 @@ namespace new_space {
                 {
                     return last.notarized_height;
                 }
-                if (NPOINTS.size() > 0)
+
+                for(auto itr = NPOINTS.rbegin(); itr != NPOINTS.rend(); ++itr)
                 {
-                    auto &idx = NPOINTS.get<0>();
-                    for( auto r_itr = idx.rbegin(); r_itr != idx.rend(); ++r_itr)
-                    {
-                        if (r_itr->MoM != zero)
-                            return r_itr->notarized_height;
-                    }
+                    if( itr->MoM != zero)
+                        return itr->notarized_height;
                 }
                 return 0;
             }
@@ -489,25 +528,19 @@ namespace new_space {
             const notarized_checkpoint *CheckpointAtHeight(int32_t height) const
             {
                 // find the nearest notarization_height
-                if(NPOINTS.size() > 0)
+                // work backwards, get the first one that meets our criteria
+                auto itr = NPOINTS.rbegin();
+                for(auto itr = NPOINTS.rbegin(); itr != NPOINTS.rend(); ++itr)
                 {
-                    auto &idx = NPOINTS.get<2>(); // search by notarized_height
-                    auto itr = idx.upper_bound(height);
-                    // work backwards, get the first one that meets our criteria
-                    while (true)
+                    if ( itr->MoMdepth != 0
+                            && height > itr->notarized_height-(itr->MoMdepth&0xffff) // 2s compliment if negative
+                            && height <= itr->notarized_height )
                     {
-                        if ( itr->MoMdepth != 0
-                                && height > itr->notarized_height-(itr->MoMdepth&0xffff)
-                                && height <= itr->notarized_height )
-                        {
-                            return &(*itr);
-                        }
-                        if (itr == idx.begin())
-                            break;
-                        --itr;
+                        return &(*itr);
                     }
-                } // we have some elements in the collection
+                }
                 return nullptr;
+
             }
     };
 
@@ -612,6 +645,11 @@ namespace new_space {
 };
 
 int main() {
+
+    using std::chrono::high_resolution_clock;
+    using std::chrono::duration_cast;
+    using std::chrono::duration;
+    using std::chrono::milliseconds;
 
     /* uint256 a("0x0ef6e4eab67aab0c780e94afdbd35c4285c26897aa374434570e2925a5e98f57");
     std::cout << a << std::endl;
@@ -752,5 +790,35 @@ int main() {
     std::cout << "[old] komodo_prevMoMheight() = " << old_space::komodo_prevMoMheight() << std::endl;
     std::cout << "[new] komodo_prevMoMheight() = " << new_space::komodo_prevMoMheight() << std::endl;
 
+    // full test (long)
+    std::cout << "[ Test ] Start" << std::endl;
+    auto t1 = high_resolution_clock::now();
+    for (size_t i = 0; i < npoints_max; ++i)
+    {
+        int32_t nHeightLocal = notarized_checkpoints[i].nHeight;
+
+        /* komodo_npptr */
+        struct notarized_checkpoint *np_old, *np_new;
+        int idx_old, idx_new;
+        np_old = old_space::komodo_npptr_for_height(nHeightLocal, &idx_old);
+        np_new = (notarized_checkpoint *)new_space::komodo_npptr(nHeightLocal);
+
+        if (np_old && np_new)
+            assert(*np_old == *np_new);
+        else
+            assert(np_old == nullptr && np_new == nullptr);
+
+        /* komodo_notarizeddata */
+        uint256 ret_notarized_hashp, ret_notarized_desttxidp;
+        old_ret_height = old_space::komodo_notarizeddata(nHeightLocal, &ret_notarized_hashp, &ret_notarized_desttxidp);
+        new_ret_height = new_space::komodo_notarizeddata(nHeightLocal, &ret_notarized_hashp, &ret_notarized_desttxidp);
+        assert(old_ret_height == new_ret_height);
+    }
+    auto t2 = high_resolution_clock::now();
+    std::cout << "[ Test ] End" << std::endl;
+
+    // auto ms_int = duration_cast<milliseconds>(t2 - t1);
+    duration<double, std::milli> ms_double = t2 - t1;
+    std::cout << "Elapsed: " << CL_GRN << ms_double.count() << " ms" << CL_N << std::endl;
     return 0;
 }
