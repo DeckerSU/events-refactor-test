@@ -162,6 +162,13 @@ struct notarized_checkpoint /* komodo_structs.h */
         bool operator != (const struct notarized_checkpoint  &other) const {
             return !(*this == other);
         }
+
+        /* notarized_checkpoint() : nHeight(0), notarized_height(0), MoMdepth(0), MoMoMdepth(0), MoMoMoffset(0), kmdstarti(0), kmdendi(0) {
+            notarized_hash.SetNull();
+            notarized_desttxid.SetNull();
+            MoM.SetNull();
+            MoMoM.SetNull();
+        } */
     };
 
 std::ostream& operator<<(std::ostream& out, const notarized_checkpoint &nc) {
@@ -176,6 +183,7 @@ std::ostream& operator<<(std::ostream& out, const notarized_checkpoint &nc) {
         << "}";
     return out;
 }
+
 typedef struct notarized_checkpoint t_notarized_checkpoint;
 
 #include "npoints-data.h"
@@ -368,7 +376,7 @@ namespace new_space {
         public:
             int32_t SAVEDHEIGHT;
             int32_t CURRENT_HEIGHT;
-            uint32_t SAVEDTIMESTAMP;
+            uint32_t SAVEDTIMESTAMP; // never used for read, only for write
             uint64_t deposited;
             uint64_t issued;
             uint64_t withdrawn;
@@ -791,7 +799,7 @@ int main() {
     std::cout << "[new] komodo_prevMoMheight() = " << new_space::komodo_prevMoMheight() << std::endl;
 
     // full test (long)
-    std::cout << "[ Test ] Start" << std::endl;
+    std::cout << "[ Test #1 ] Start" << std::endl;
     auto t1 = high_resolution_clock::now();
     for (size_t i = 0; i < npoints_max; ++i)
     {
@@ -815,10 +823,33 @@ int main() {
         assert(old_ret_height == new_ret_height);
     }
     auto t2 = high_resolution_clock::now();
-    std::cout << "[ Test ] End" << std::endl;
+    std::cout << "[ Test #1 ] End" << std::endl;
 
     // auto ms_int = duration_cast<milliseconds>(t2 - t1);
     duration<double, std::milli> ms_double = t2 - t1;
     std::cout << "Elapsed: " << CL_GRN << ms_double.count() << " ms" << CL_N << std::endl;
+
+    // komodo_notarizeddata tests
+    std::cout << "[ Test #2 ] Start" << std::endl;
+    t1 = high_resolution_clock::now();
+
+    int32_t heightDelta = 10000;
+    for (int32_t nHeight = 2441332 - heightDelta; nHeight < 2524224 + heightDelta; ++nHeight)
+    {
+        uint256 old_out_notarized_hash, old_out_notarized_desttxid;
+        uint256 new_out_notarized_hash, new_out_notarized_desttxid;
+
+        int32_t old_notarized_height = old_space::komodo_notarizeddata(nHeight, &old_out_notarized_hash, &old_out_notarized_desttxid);
+        int32_t new_notarized_height = new_space::komodo_notarizeddata(nHeight, &new_out_notarized_hash, &new_out_notarized_desttxid);
+
+        assert(old_notarized_height == new_notarized_height);
+        assert(old_out_notarized_hash == new_out_notarized_hash);
+        assert(old_out_notarized_desttxid == new_out_notarized_desttxid);
+    }
+    t2 = high_resolution_clock::now();
+    std::cout << "[ Test #2 ] End" << std::endl;
+    ms_double = t2 - t1;
+    std::cout << "Elapsed: " << CL_GRN << ms_double.count() << " ms" << CL_N << std::endl;
+
     return 0;
 }
