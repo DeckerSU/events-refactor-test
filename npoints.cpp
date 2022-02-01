@@ -403,6 +403,7 @@ namespace new_space {
             void SetLastNotarizedHeight(const int32_t in) { last.notarized_height = in; }
             const int32_t &LastNotarizedMoMDepth() const { return last.MoMdepth; }
             void SetLastNotarizedMoMDepth(const int32_t in) { last.MoMdepth =in; }
+            const size_t getNPOINTS_last_index() { return NPOINTS_last_index; } // just for a tests and debug, haven't any real application
 
             /*****
              * @brief add a checkpoint to the collection and update member values
@@ -850,6 +851,26 @@ int main() {
     std::cout << "[ Test #2 ] End" << std::endl;
     ms_double = t2 - t1;
     std::cout << "Elapsed: " << CL_GRN << ms_double.count() << " ms" << CL_N << std::endl;
+
+    auto test_lambda = [](int32_t nHeight)
+    {
+        uint256 old_out_notarized_hash, old_out_notarized_desttxid;
+        uint256 new_out_notarized_hash, new_out_notarized_desttxid;
+        int32_t old_notarized_height = old_space::komodo_notarizeddata(nHeight, &old_out_notarized_hash, &old_out_notarized_desttxid);
+        int32_t new_notarized_height = new_space::komodo_notarizeddata(nHeight, &new_out_notarized_hash, &new_out_notarized_desttxid);
+        std::cout << "[" << nHeight << "] " << old_notarized_height << " - " << new_notarized_height << std::endl;
+        return old_notarized_height == new_notarized_height;
+    };
+
+    std::cout << "Size: " << old_space::ks_old.NUM_NPOINTS << " - " << new_space::ks_new.NumCheckpoints() << std::endl;
+
+    std::cout << "// " << old_space::ks_old.last_NPOINTSi << " - " << new_space::ks_new.getNPOINTS_last_index() << std::endl;
+    test_lambda(2524003);
+    std::cout << "// " << old_space::ks_old.last_NPOINTSi << " - " << new_space::ks_new.getNPOINTS_last_index() << std::endl;
+    test_lambda(2524004);
+    std::cout << "// " << old_space::ks_old.last_NPOINTSi << " - " << new_space::ks_new.getNPOINTS_last_index() << std::endl;
+    test_lambda(2524005);
+    std::cout << "// " << old_space::ks_old.last_NPOINTSi << " - " << new_space::ks_new.getNPOINTS_last_index() << std::endl;
 
     return 0;
 }
