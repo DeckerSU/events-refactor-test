@@ -18,10 +18,7 @@
 
 #include <cstdint>
 #include <string>
-
-namespace komodo {
-    class parse_error;
-}
+#include "events-tests.h"
 
 /***
  * These read a chunk of memory with some built-in type safety

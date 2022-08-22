@@ -16,6 +16,7 @@
 
 #include "tinyformat.h"
 #include "mem_read.h"
+#include "events-tests.h"
 
 #define portable_mutex_lock pthread_mutex_lock
 #define portable_mutex_unlock pthread_mutex_unlock
@@ -491,15 +492,6 @@ namespace komodo {
         EVENT_OPRETURN,
         EVENT_PRICEFEED,
         EVENT_REWIND
-    };
-
-    /***
-     * Thrown by event constructors when it finds a problem with the input data
-     */
-    class parse_error : public std::logic_error
-    {
-    public:
-        parse_error(const std::string& in) : std::logic_error(in) {}
     };
 
     /***
@@ -1167,5 +1159,7 @@ int main() {
     assert(sp_old->NUM_NPOINTS == sp_new->NUM_NPOINTS);
     // TODO: compare NPOINTS (!)
 
+
+    /* TODO: Events create, serializing, write to file tests ... */
     return 0;
 }
