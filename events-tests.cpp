@@ -1,3 +1,7 @@
+/*
+    g++ -std=c++11 -O0 -g events-tests.cpp -o events-tests
+*/
+
 #include <iostream>
 #include <cstdint>
 #include <cstring>
@@ -29,28 +33,45 @@ int32_t KOMODO_LASTMINED,prevKOMODO_LASTMINED; /* komodo_globals.h */
 
 bool IS_KOMODO_NOTARY = false;
 
-union _bits256 { uint8_t bytes[32]; uint16_t ushorts[16]; uint32_t uints[8]; uint64_t ulongs[4]; uint64_t txid;
-std::string ToString()
-{
-    std::string res = "";
-    for (int i=0; i<32; i++)
-        res = res + strprintf("%02x", bytes[i]);
-    return res;
-}
-std::string ToStringRev()
-{
-    std::string res = "";
-    for (int i=0; i<32; i++)
-        res = strprintf("%02x", bytes[i]) + res;
-    return res;
-}
-void SetNull() {
-    for (int i=0; i<32; i++) bytes[i] = 0;
-}
+union _bits256 {
+
+    uint8_t bytes[32]; uint16_t ushorts[16]; uint32_t uints[8]; uint64_t ulongs[4];
+    uint64_t txid;
+
+    std::string ToString() const
+    {
+        std::string res = "";
+        for (int i=0; i<32; i++)
+            res = res + strprintf("%02x", bytes[i]);
+        return res;
+    }
+
+    std::string ToStringRev() const
+    {
+        std::string res = "";
+        for (int i=0; i<32; i++)
+            res = strprintf("%02x", bytes[i]) + res;
+        return res;
+    }
+
+    void SetNull() {
+        for (int i=0; i<32; i++) bytes[i] = 0;
+    }
 };
 
 typedef union _bits256 bits256;
 typedef union _bits256 uint256;
+
+bool operator==(const _bits256& lhs, const _bits256& rhs) {
+    if (lhs.ulongs[0] != rhs.ulongs[0] ||
+        lhs.ulongs[1] != rhs.ulongs[1] ||
+        lhs.ulongs[2] != rhs.ulongs[2] ||
+        lhs.ulongs[3] != rhs.ulongs[3])
+    return false;
+    return true;
+}
+
+inline bool operator!=(const uint256& lhs, const uint256& rhs) { return !(lhs == rhs); }
 
 typedef int64_t CAmount;
 static const CAmount COIN = 100000000; // amount.h
@@ -783,17 +804,270 @@ struct notarized_checkpoint /* komodo_structs.h */
         uint8_t space[];
     };
 
-    struct komodo_state
+    // struct komodo_state
+    // {
+    //     uint256 NOTARIZED_HASH,NOTARIZED_DESTTXID,MoM;
+    //     int32_t SAVEDHEIGHT,CURRENT_HEIGHT,NOTARIZED_HEIGHT,MoMdepth;
+    //     uint32_t SAVEDTIMESTAMP;
+    //     uint64_t deposited,issued,withdrawn,approved,redeemed,shorted;
+    //     struct notarized_checkpoint *NPOINTS; int32_t NUM_NPOINTS,last_NPOINTS;
+    //     std::list<std::shared_ptr<komodo::event>> events;
+    //     uint32_t RTbufs[64][3]; uint64_t RTmask;
+    //     bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
+    // };
+
+    /* src/komodo_structs.h */
+    class komodo_state
     {
-        uint256 NOTARIZED_HASH,NOTARIZED_DESTTXID,MoM;
-        int32_t SAVEDHEIGHT,CURRENT_HEIGHT,NOTARIZED_HEIGHT,MoMdepth;
+    public:
+        int32_t SAVEDHEIGHT;
+        int32_t CURRENT_HEIGHT;
         uint32_t SAVEDTIMESTAMP;
-        uint64_t deposited,issued,withdrawn,approved,redeemed,shorted;
-        struct notarized_checkpoint *NPOINTS; int32_t NUM_NPOINTS,last_NPOINTS;
+        uint64_t deposited;
+        uint64_t issued;
+        uint64_t withdrawn;
+        uint64_t approved;
+        uint64_t redeemed;
+        uint64_t shorted;
         std::list<std::shared_ptr<komodo::event>> events;
         uint32_t RTbufs[64][3]; uint64_t RTmask;
         bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
+    protected:
+        /***
+         * @brief clear the checkpoints collection
+         * @note should only be used by tests
+         */
+        void clear_checkpoints();
+        std::vector<notarized_checkpoint> NPOINTS; // collection of notarizations
+        mutable size_t NPOINTS_last_index = 0; // caches checkpoint linear search position
+        notarized_checkpoint last;
+
+    public:
+        const uint256 &LastNotarizedHash() const;
+        void SetLastNotarizedHash(const uint256 &in);
+        const uint256 &LastNotarizedDestTxId() const;
+        void SetLastNotarizedDestTxId(const uint256 &in);
+        const uint256 &LastNotarizedMoM() const;
+        void SetLastNotarizedMoM(const uint256 &in);
+        const int32_t &LastNotarizedHeight() const;
+        void SetLastNotarizedHeight(const int32_t in);
+        const int32_t &LastNotarizedMoMDepth() const;
+        void SetLastNotarizedMoMDepth(const int32_t in);
+
+        /*****
+         * @brief add a checkpoint to the collection and update member values
+         * @param in the new values
+         */
+        void AddCheckpoint(const notarized_checkpoint &in);
+
+        uint64_t NumCheckpoints() const;
+
+        /****
+         * Get the notarization data below a particular height
+         * @param[in] nHeight the height desired
+         * @param[out] notarized_hashp the hash of the notarized block
+         * @param[out] notarized_desttxidp the desttxid
+         * @returns the notarized height
+         */
+        int32_t NotarizedData(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp) const;
+
+        /******
+         * @brief Get the last notarization information
+         * @param[out] prevMoMheightp the MoM height
+         * @param[out] hashp the notarized hash
+         * @param[out] txidp the DESTTXID
+         * @returns the notarized height
+         */
+        int32_t NotarizedHeight(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
+
+        /****
+         * Search for the last (chronological) MoM notarized height
+         * @returns the last notarized height that has a MoM
+         */
+        int32_t PrevMoMHeight() const;
+
+        /******
+         * @brief Search the notarized checkpoints for a particular height
+         * @note Finding a mach does include other criteria other than height
+         *      such that the checkpoint includes the desired height
+         * @param height the notarized_height desired
+         * @returns the checkpoint or nullptr
+         */
+        const notarized_checkpoint *CheckpointAtHeight(int32_t height) const;
     };
+
+    /*****
+     * @brief add a checkpoint to the collection and update member values
+     * @param in the new values
+     */
+    void komodo_state::AddCheckpoint(const notarized_checkpoint &in)
+    {
+        NPOINTS.push_back(in);
+        last = in;
+    }
+
+    /****
+     * Get the notarization data below a particular height
+     * @param[in] nHeight the height desired
+     * @param[out] notarized_hashp the hash of the notarized block
+     * @param[out] notarized_desttxidp the desttxid
+     * @returns the notarized height
+     */
+    int32_t komodo_state::NotarizedData(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp) const
+    {
+        bool found = false;
+
+        if ( NPOINTS.size() > 0 )
+        {
+            const notarized_checkpoint* np = nullptr;
+            if ( NPOINTS_last_index < NPOINTS.size() && NPOINTS_last_index > 0 ) // if we cached an NPOINT index
+            {
+                np = &NPOINTS[NPOINTS_last_index-1]; // grab the previous
+                if ( np->nHeight < nHeight ) // if that previous is below the height we are looking for
+                {
+                    for (size_t i = NPOINTS_last_index; i < NPOINTS.size(); i++) // move forward
+                    {
+                        if ( NPOINTS[i].nHeight >= nHeight ) // if we found the height we are looking for (or beyond)
+                        {
+                            found = true; // notify ourselves we were here
+                            break; // get out
+                        }
+                        np = &NPOINTS[i];
+                        NPOINTS_last_index = i;
+                    }
+                }
+            }
+            if ( !found ) // we still haven't found what we were looking for
+            {
+                np = nullptr; // reset
+                for (size_t i = 0; i < NPOINTS.size(); i++) // linear search from the start
+                {
+                    if ( NPOINTS[i].nHeight >= nHeight )
+                    {
+                        found = true;
+                        break;
+                    }
+                    np = &NPOINTS[i];
+                    NPOINTS_last_index = i;
+                }
+            }
+            if ( np != nullptr )
+            {
+                if ( np->nHeight >= nHeight || (found && np[1].nHeight < nHeight) )
+                    fprintf(stderr, "warning: flag.%d i.%ld np->ht %d [1].ht %d >= nHeight.%d\n",
+                            (int)found,NPOINTS_last_index,np->nHeight,np[1].nHeight,nHeight);
+                *notarized_hashp = np->notarized_hash;
+                *notarized_desttxidp = np->notarized_desttxid;
+                return(np->notarized_height);
+            }
+        }
+        memset(notarized_hashp,0,sizeof(*notarized_hashp));
+        memset(notarized_desttxidp,0,sizeof(*notarized_desttxidp));
+        return 0;
+    }
+
+    /******
+     * @brief Get the last notarization information
+     * @param[out] prevMoMheightp the MoM height
+     * @param[out] hashp the notarized hash
+     * @param[out] txidp the DESTTXID
+     * @returns the notarized height
+     */
+    int32_t komodo_state::NotarizedHeight(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp)
+    {
+        /*
+        CBlockIndex *pindex;
+        if ( (pindex= komodo_blockindex(last.notarized_hash)) == 0 || pindex->nHeight < 0 )
+        {
+            // found orphaned notarization, adjust the values in the komodo_state object
+            last.notarized_hash.SetNull();
+            last.notarized_desttxid.SetNull();
+            last.notarized_height = 0;
+        }
+        else
+        */
+        {
+            *hashp = last.notarized_hash;
+            *txidp = last.notarized_desttxid;
+            *prevMoMheightp = PrevMoMHeight();
+        }
+        return last.notarized_height;
+    }
+
+    /****
+     * Search for the last (chronological) MoM notarized height
+     * @returns the last notarized height that has a MoM
+     */
+    int32_t komodo_state::PrevMoMHeight() const
+    {
+        static uint256 zero;
+        // shortcut
+        if (last.MoM != zero)
+        {
+            return last.notarized_height;
+        }
+
+        for(auto itr = NPOINTS.rbegin(); itr != NPOINTS.rend(); ++itr)
+        {
+            if( itr->MoM != zero)
+                return itr->notarized_height;
+        }
+        return 0;
+    }
+
+    /******
+     * @brief Search the notarized checkpoints for a particular height
+     * @note Finding a mach does include other criteria other than height
+     *      such that the checkpoint includes the desired height
+     * @param height the notarized_height desired
+     * @returns the checkpoint or nullptr
+     */
+    const notarized_checkpoint *komodo_state::CheckpointAtHeight(int32_t height) const
+    {
+        // find the nearest notarization_height
+        // work backwards, get the first one that meets our criteria
+        for(auto itr = NPOINTS.rbegin(); itr != NPOINTS.rend(); ++itr)
+        {
+            if ( itr->MoMdepth != 0
+                    && height > itr->notarized_height-(itr->MoMdepth&0xffff) // 2s compliment if negative
+                    && height <= itr->notarized_height )
+            {
+                return &(*itr);
+            }
+        }
+        return nullptr;
+    }
+
+    void komodo_state::clear_checkpoints() { NPOINTS.clear(); }
+    const uint256& komodo_state::LastNotarizedHash() const { return last.notarized_hash; }
+    void komodo_state::SetLastNotarizedHash(const uint256 &in) { last.notarized_hash = in; }
+    const uint256& komodo_state::LastNotarizedDestTxId() const { return last.notarized_desttxid; }
+    void komodo_state::SetLastNotarizedDestTxId(const uint256 &in) { last.notarized_desttxid = in; }
+    const uint256& komodo_state::LastNotarizedMoM() const { return last.MoM; }
+    void komodo_state::SetLastNotarizedMoM(const uint256 &in) { last.MoM = in; }
+    const int32_t& komodo_state::LastNotarizedHeight() const { return last.notarized_height; }
+    void komodo_state::SetLastNotarizedHeight(const int32_t in) { last.notarized_height = in; }
+    const int32_t& komodo_state::LastNotarizedMoMDepth() const { return last.MoMdepth; }
+    void komodo_state::SetLastNotarizedMoMDepth(const int32_t in) { last.MoMdepth =in; }
+    uint64_t komodo_state::NumCheckpoints() const { return NPOINTS.size(); }
+
+    bool operator==(const notarized_checkpoint& lhs, const notarized_checkpoint& rhs)
+    {
+        if (lhs.notarized_hash != rhs.notarized_hash
+                || lhs.notarized_desttxid != rhs.notarized_desttxid
+                || lhs.MoM != rhs.MoM
+                || lhs.MoMoM != rhs.MoMoM
+                || lhs.nHeight != rhs.nHeight
+                || lhs.notarized_height != rhs.notarized_height
+                || lhs.MoMdepth != rhs.MoMdepth
+                || lhs.MoMoMdepth != rhs.MoMoMdepth
+                || lhs.MoMoMoffset != rhs.MoMoMoffset
+                || lhs.kmdstarti != rhs.kmdstarti
+                || lhs.kmdendi != rhs.kmdendi)
+            return false;
+        return true;
+    }
+
 
     // komodo_structs.cpp
     bool komodo_state::add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in)
@@ -817,7 +1091,7 @@ struct notarized_checkpoint /* komodo_structs.h */
         }
     }
 
-    void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth)
+/*     void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth)
     {
         struct notarized_checkpoint *np;
         if ( notarized_height >= nHeight )
@@ -828,7 +1102,9 @@ struct notarized_checkpoint /* komodo_structs.h */
         if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 )
             fprintf(stderr,"[%s] komodo_notarized_update nHeight.%d notarized_height.%d\n",ASSETCHAINS_SYMBOL,nHeight,notarized_height);
         std::lock_guard<std::mutex> lock(komodo_mutex);
+
         sp->NPOINTS = (struct notarized_checkpoint *)realloc(sp->NPOINTS,(sp->NUM_NPOINTS+1) * sizeof(*sp->NPOINTS));
+
         np = &sp->NPOINTS[sp->NUM_NPOINTS++];
         // why we still used pointers for notarized checkpoints ???
         memset(np,0,sizeof(*np));
@@ -838,6 +1114,39 @@ struct notarized_checkpoint /* komodo_structs.h */
         sp->NOTARIZED_DESTTXID = np->notarized_desttxid = notarized_desttxid;
         sp->MoM = np->MoM = MoM;
         sp->MoMdepth = np->MoMdepth = MoMdepth;
+    } */
+
+    /***
+     * Add a notarized checkpoint to the komodo_state
+     * @param[in] sp the komodo_state to add to
+     * @param[in] nHeight the height
+     * @param[in] notarized_height the height of the notarization
+     * @param[in] notarized_hash the hash of the notarization
+     * @param[in] notarized_desttxid the txid of the notarization on the destination chain
+     * @param[in] MoM the MoM
+     * @param[in] MoMdepth the depth
+     */
+    void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,
+            uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth)
+    {
+        if ( notarized_height >= nHeight )
+        {
+            fprintf(stderr,"komodo_notarized_update REJECT notarized_height %d > %d nHeight\n",notarized_height,nHeight);
+            return;
+        }
+
+        notarized_checkpoint new_cp;
+        new_cp.nHeight = nHeight;
+        new_cp.notarized_height = notarized_height;
+        new_cp.notarized_hash = notarized_hash;
+        new_cp.notarized_desttxid = notarized_desttxid;
+        new_cp.MoM = MoM;
+        new_cp.MoMdepth = MoMdepth;
+        //portable_mutex_lock(&komodo_mutex);
+        komodo_mutex.lock();
+        sp->AddCheckpoint(new_cp);
+        //portable_mutex_unlock(&komodo_mutex);
+        komodo_mutex.unlock();
     }
 
     void komodo_eventadd_notarized( komodo_state *sp, char *symbol, int32_t height, std::shared_ptr<komodo::event_notarized> ntz)
@@ -1087,6 +1396,7 @@ int main() {
 
     struct events_new::komodo_state KOMODO_STATE_NEW;
     // memset(&KOMODO_STATE_NEW, 0, sizeof(KOMODO_STATE_NEW)); // we can't do such thing here, bcz we will damage std::list
+
     struct events_new::komodo_state *sp_new = &KOMODO_STATE_NEW;
 
     fp= fopen("komodostate","rb");
@@ -1131,7 +1441,7 @@ int main() {
 
         std::cerr << "read_count = " << read_count << std::endl;
         std::cerr << "rewind_count = " << events_new::rewind_count << std::endl;
-        std::cerr << "sp->NUM_NPOINTS = " << sp_new->NUM_NPOINTS << std::endl;
+        std::cerr << "sp->NUM_NPOINTS = " << sp_new->NumCheckpoints() << std::endl;
         // std::cerr << "sp->Komodo_numevents = " << sp_new->Komodo_numevents << std::endl;
         std::cerr << "sp->events.size() = " << sp_new->events.size() << std::endl;
 
@@ -1167,22 +1477,22 @@ int main() {
         std::cerr << i++ << ". " << komodo_event_type_names[ptr->type] << " " << ptr->height << std::endl;
     } */
 
-    std::cerr << sp_old->NOTARIZED_HASH.ToStringRev() << " - " << sp_new->NOTARIZED_HASH.ToStringRev() << std::endl;
-    assert(sp_old->NOTARIZED_HASH.ToStringRev() == sp_new->NOTARIZED_HASH.ToStringRev());
-    std::cerr << sp_old->NOTARIZED_DESTTXID.ToStringRev() << " - " << sp_new->NOTARIZED_DESTTXID.ToStringRev() << std::endl;
-    assert(sp_old->NOTARIZED_DESTTXID.ToStringRev() == sp_new->NOTARIZED_DESTTXID.ToStringRev());
-    std::cerr << sp_old->MoM.ToStringRev() << " - " << sp_new->MoM.ToStringRev() << std::endl;
-    assert(sp_old->MoM.ToStringRev() == sp_new->MoM.ToStringRev());
+    std::cerr << sp_old->NOTARIZED_HASH.ToStringRev() << " - " << sp_new->LastNotarizedHash().ToStringRev() << std::endl;
+    assert(sp_old->NOTARIZED_HASH.ToStringRev() == sp_new->LastNotarizedHash().ToStringRev());
+    std::cerr << sp_old->NOTARIZED_DESTTXID.ToStringRev() << " - " << sp_new->LastNotarizedDestTxId().ToStringRev() << std::endl;
+    assert(sp_old->NOTARIZED_DESTTXID.ToStringRev() == sp_new->LastNotarizedDestTxId().ToStringRev());
+    std::cerr << sp_old->MoM.ToStringRev() << " - " << sp_new->LastNotarizedMoM().ToStringRev() << std::endl;
+    assert(sp_old->MoM.ToStringRev() == sp_new->LastNotarizedMoM().ToStringRev());
     std::cerr << sp_old->SAVEDHEIGHT << " - " << sp_new->SAVEDHEIGHT << std::endl;
     assert(sp_old->SAVEDHEIGHT == sp_new->SAVEDHEIGHT);
     std::cerr << sp_old->CURRENT_HEIGHT << " - " << sp_new->CURRENT_HEIGHT << std::endl;
     assert(sp_old->CURRENT_HEIGHT == sp_new->CURRENT_HEIGHT);
-    std::cerr << sp_old->NOTARIZED_HEIGHT << " - " << sp_new->NOTARIZED_HEIGHT << std::endl;
-    assert(sp_old->NOTARIZED_HEIGHT == sp_new->NOTARIZED_HEIGHT);
+    std::cerr << sp_old->NOTARIZED_HEIGHT << " - " << sp_new->LastNotarizedHeight() << std::endl;
+    assert(sp_old->NOTARIZED_HEIGHT == sp_new->LastNotarizedHeight());
     std::cerr << sp_old->SAVEDTIMESTAMP << " - " << sp_new->SAVEDTIMESTAMP << std::endl;
     assert(sp_old->SAVEDTIMESTAMP == sp_new->SAVEDTIMESTAMP);
-    std::cerr << sp_old->NUM_NPOINTS << " - " << sp_new->NUM_NPOINTS << std::endl;
-    assert(sp_old->NUM_NPOINTS == sp_new->NUM_NPOINTS);
+    std::cerr << sp_old->NUM_NPOINTS << " - " << sp_new->NumCheckpoints() << std::endl;
+    assert(sp_old->NUM_NPOINTS == sp_new->NumCheckpoints());
     // TODO: compare NPOINTS (!)
 
     /* TODO: Events create, serializing, write to file tests ... */
