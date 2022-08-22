@@ -804,18 +804,6 @@ struct notarized_checkpoint /* komodo_structs.h */
         uint8_t space[];
     };
 
-    // struct komodo_state
-    // {
-    //     uint256 NOTARIZED_HASH,NOTARIZED_DESTTXID,MoM;
-    //     int32_t SAVEDHEIGHT,CURRENT_HEIGHT,NOTARIZED_HEIGHT,MoMdepth;
-    //     uint32_t SAVEDTIMESTAMP;
-    //     uint64_t deposited,issued,withdrawn,approved,redeemed,shorted;
-    //     struct notarized_checkpoint *NPOINTS; int32_t NUM_NPOINTS,last_NPOINTS;
-    //     std::list<std::shared_ptr<komodo::event>> events;
-    //     uint32_t RTbufs[64][3]; uint64_t RTmask;
-    //     bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
-    // };
-
     /* src/komodo_structs.h */
     class komodo_state
     {
@@ -1090,31 +1078,6 @@ struct notarized_checkpoint /* komodo_structs.h */
             /* komodo_notarysinit(height, pk->pubkeys, pk->num); */
         }
     }
-
-/*     void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth)
-    {
-        struct notarized_checkpoint *np;
-        if ( notarized_height >= nHeight )
-        {
-            fprintf(stderr,"komodo_notarized_update REJECT notarized_height %d > %d nHeight\n",notarized_height,nHeight);
-            return;
-        }
-        if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 )
-            fprintf(stderr,"[%s] komodo_notarized_update nHeight.%d notarized_height.%d\n",ASSETCHAINS_SYMBOL,nHeight,notarized_height);
-        std::lock_guard<std::mutex> lock(komodo_mutex);
-
-        sp->NPOINTS = (struct notarized_checkpoint *)realloc(sp->NPOINTS,(sp->NUM_NPOINTS+1) * sizeof(*sp->NPOINTS));
-
-        np = &sp->NPOINTS[sp->NUM_NPOINTS++];
-        // why we still used pointers for notarized checkpoints ???
-        memset(np,0,sizeof(*np));
-        np->nHeight = nHeight;
-        sp->NOTARIZED_HEIGHT = np->notarized_height = notarized_height;
-        sp->NOTARIZED_HASH = np->notarized_hash = notarized_hash;
-        sp->NOTARIZED_DESTTXID = np->notarized_desttxid = notarized_desttxid;
-        sp->MoM = np->MoM = MoM;
-        sp->MoMdepth = np->MoMdepth = MoMdepth;
-    } */
 
     /***
      * Add a notarized checkpoint to the komodo_state
@@ -1536,17 +1499,6 @@ int main() {
     }
 
     /* event_pubkeys tests #2 */
-    {
-        uint8_t data[1 + 64 * 33];
-
-        /* if data array definition exists there, we get a following error in code above:
-
-            events-tests(6142,0x100137d40) malloc: *** error for object 0x19823c000: pointer being realloc'd was not allocated
-            events-tests(6142,0x100137d40) malloc: *** set a breakpoint in malloc_error_break to debug
-        */
-    }
-
-    /* event_pubkeys tests #3 */
     {
         /*  fp= fopen("events.bin","wb");
          if (fp) {
