@@ -1142,11 +1142,8 @@ struct notarized_checkpoint /* komodo_structs.h */
         new_cp.notarized_desttxid = notarized_desttxid;
         new_cp.MoM = MoM;
         new_cp.MoMdepth = MoMdepth;
-        //portable_mutex_lock(&komodo_mutex);
-        komodo_mutex.lock();
+        std::lock_guard<std::mutex> lock(komodo_mutex);
         sp->AddCheckpoint(new_cp);
-        //portable_mutex_unlock(&komodo_mutex);
-        komodo_mutex.unlock();
     }
 
     void komodo_eventadd_notarized( komodo_state *sp, char *symbol, int32_t height, std::shared_ptr<komodo::event_notarized> ntz)
