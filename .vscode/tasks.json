@@ -19,6 +19,25 @@
             "problemMatcher": [
                 "$gcc"
             ],
+            "group": "build",
+            "detail": "compiler: /usr/bin/clang"
+        },
+        {
+            "type": "cppbuild",
+            "label": "[Mac] C/C++: clang build events-tests.cpp",
+            "command": "/usr/bin/clang++",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-std=c++11",
+                "-O0",
+                "-g",
+                "events-tests.cpp",
+                "-o",
+                "${workspaceFolder}/events-tests"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": {
                 "kind": "build",
                 "isDefault": true
