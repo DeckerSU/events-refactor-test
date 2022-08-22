@@ -1185,17 +1185,19 @@ int main() {
     assert(sp_old->NUM_NPOINTS == sp_new->NUM_NPOINTS);
     // TODO: compare NPOINTS (!)
 
-
     /* TODO: Events create, serializing, write to file tests ... */
-    fp= fopen("events.bin","wb");
-    if (fp) {
-        fseek(fp,0,SEEK_END);
 
-        /* event_pubkeys tests */
+    /* event_pubkeys tests #1 */
+    {
+        fp = fopen("events.bin", "wb");
+        if (fp)
         {
+            fseek(fp, 0, SEEK_END);
+
             std::shared_ptr<komodo::event_pubkeys> evt = std::make_shared<komodo::event_pubkeys>(1);
             // evt->num = 2;
-            for (size_t i = 0; i < 64; i++) {
+            for (size_t i = 0; i < 64; i++)
+            {
                 memset(&evt->pubkeys[i], i, 33);
             }
 
@@ -1205,7 +1207,7 @@ int main() {
             // https://en.cppreference.com/w/c/language/array_initialization
             // https://stackoverflow.com/questions/38892455/initializing-an-array-of-zeroes
 
-            uint8_t data[1 + 64 * 33] = { 1 }; // first byte is size, and other 64 * 33 are pubkeys 0..63
+            uint8_t data[1 + 64 * 33] = {1}; // first byte is size, and other 64 * 33 are pubkeys 0..63
 
             for (size_t i = 0; i < 64; i++)
             {
@@ -1221,11 +1223,34 @@ int main() {
             bool fEqual = *evt_data == kep;
             std::cout << "fEqual = " << (fEqual ? "true" : "false") << std::endl;
             // https://github.com/KomodoPlatform/komodo/pull/510 - reference to a bug with uninitialized pubkeys member.
-        }
 
-        fclose(fp);
+            fclose(fp);
+        }
     }
 
+    /* event_pubkeys tests #2 */
+    {
+        uint8_t data[1 + 64 * 33];
+
+        /* if data array definition exists there, we get a following error in code above:
+
+            events-tests(6142,0x100137d40) malloc: *** error for object 0x19823c000: pointer being realloc'd was not allocated
+            events-tests(6142,0x100137d40) malloc: *** set a breakpoint in malloc_error_break to debug
+        */
+    }
+
+    /* event_pubkeys tests #3 */
+    {
+        /*  fp= fopen("events.bin","wb");
+         if (fp) {
+
+             uint8_t data[1 + 64 * 33] = { 1 };
+             for (size_t i = 0; i < 64; i++)
+                 memset(1 + &data[0] + i * 33, i, 33);
+             fwrite(data, sizeof(data), 1, fp);
+             fclose(fp);
+         } */
+    }
 
     return 0;
 }
