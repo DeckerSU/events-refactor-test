@@ -1042,6 +1042,32 @@ struct notarized_checkpoint /* komodo_structs.h */
 
 }
 
+/***
+ * @brief persist event to file stream
+ * @param evt the event
+ * @param fp the file
+ * @returns the number of bytes written
+ */
+size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
+{
+    std::stringstream ss;
+    ss << evt;
+    std::string buf = ss.str();
+    return fwrite(buf.c_str(), buf.size(), 1, fp);
+}
+
+bool operator==(const komodo::event_pubkeys& lhs, const komodo::event_pubkeys& rhs) {
+    if (lhs.height != rhs.height ||
+        lhs.num != rhs.num ||
+        lhs.type != rhs.type)
+        return false;
+    for (int i = 0; i < sizeof(komodo::event_pubkeys::pubkeys)/sizeof(komodo::event_pubkeys::pubkeys[0]); i++) {
+        if (memcmp(&lhs.pubkeys[i][0], &rhs.pubkeys[i][0], 33) != 0)
+            return false;
+    }
+    return true;
+}
+
 int main() {
 
     std::cout << "--- Komodo Events :: Simple Tests (q) Decker ---" << std::endl;
@@ -1161,5 +1187,45 @@ int main() {
 
 
     /* TODO: Events create, serializing, write to file tests ... */
+    fp= fopen("events.bin","wb");
+    if (fp) {
+        fseek(fp,0,SEEK_END);
+
+        /* event_pubkeys tests */
+        {
+            std::shared_ptr<komodo::event_pubkeys> evt = std::make_shared<komodo::event_pubkeys>(1);
+            // evt->num = 2;
+            for (size_t i = 0; i < 64; i++) {
+                memset(&evt->pubkeys[i], i, 33);
+            }
+
+            /* error: write a pointer, like 0x10100a218, instead of object content */
+            write_event(evt, fp);
+
+            // https://en.cppreference.com/w/c/language/array_initialization
+            // https://stackoverflow.com/questions/38892455/initializing-an-array-of-zeroes
+
+            uint8_t data[1 + 64 * 33] = { 1 }; // first byte is size, and other 64 * 33 are pubkeys 0..63
+
+            for (size_t i = 0; i < 64; i++)
+            {
+                memset(1 + &data[0] + i * 33, i, 33);
+            }
+
+            long pos;
+            pos = 0;
+            komodo::event_pubkeys kep(&data[0], pos, sizeof(data), 1);
+            pos = 0; // don't forget to zero pos in data from which data will be read
+            std::shared_ptr<komodo::event_pubkeys> evt_data = std::make_shared<komodo::event_pubkeys>(&data[0], pos, sizeof(data), 1);
+
+            bool fEqual = *evt_data == kep;
+            std::cout << "fEqual = " << (fEqual ? "true" : "false") << std::endl;
+            // https://github.com/KomodoPlatform/komodo/pull/510 - reference to a bug with uninitialized pubkeys member.
+        }
+
+        fclose(fp);
+    }
+
+
     return 0;
 }
