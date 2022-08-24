@@ -1505,19 +1505,18 @@ int main() {
 
     /* event_pubkeys tests #2 */
     {
-        fp = fopen("events.bin","wb");
+        fp = fopen("events.bin","w+b");
         if (fp) {
             uint8_t data[1 + 64 * 33] = { 1 };
             for (size_t i = 0; i < 64; i++)
                 memset(1 + &data[0] + i * 33, i, 33);
             fwrite(data, sizeof(data), 1, fp);
+            fseek(fp, 0, SEEK_SET);
+            komodo::event_pubkeys kep1(fp, 777);
+            long pos = 0;
+            komodo::event_pubkeys kep2(data, pos, sizeof(data), 777);
             fclose(fp);
-
-            FILE *fp_read = fopen("events.bin","rb");
-            if (fp_read) {
-                komodo::event_pubkeys kep(fp_read, 1);
-                fclose(fp_read);
-            }
+            assert(kep1 == kep2);
         }
     }
     // here #510 bug exists as well, if num of read records < 64 (records with indexes higher than num remains unitialized)
