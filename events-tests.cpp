@@ -632,6 +632,7 @@ namespace komodo {
         uint64_t value = 0;
         std::vector<uint8_t> opret;
     };
+    std::ostream& operator<<(std::ostream& os, const event_opreturn& in);
 
     struct event_pricefeed : public event
     {
@@ -845,6 +846,18 @@ namespace komodo {
         os << e << serializable<int32_t>(in.kheight);
         if (in.timestamp > 0)
             os << serializable<int32_t>(in.timestamp);
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const event_opreturn& in)
+    {
+        const event& e = dynamic_cast<const event&>(in);
+        os << e
+            << serializable<uint256>(in.txid)
+            << serializable<uint16_t>(in.vout)
+            << serializable<uint64_t>(in.value)
+            << serializable<uint16_t>(in.opret.size());
+        os.write( (const char*)in.opret.data(), in.opret.size());
         return os;
     }
 
@@ -1755,54 +1768,70 @@ int main() {
         FILE *fp;
         fp = fopen("allevents.bin","w+b");
         if (fp) {
-            /* EVENT_PUBKEYS */
-            komodo::event_pubkeys evt_pubkeys(height);
-            evt_pubkeys.num = 1;
-            for(int i = 0; i < 33; ++i) evt_pubkeys.pubkeys[0][i] = i;
+            for (int repeats=0; repeats < 1; ++repeats)
+            {
+                /* EVENT_PUBKEYS */
+                komodo::event_pubkeys evt_pubkeys(height);
+                evt_pubkeys.num = 1;
+                for(int i = 0; i < 33; ++i) evt_pubkeys.pubkeys[0][i] = i;
 
-            ser.clear();
-            ser = HexStr((std::stringstream() << evt_pubkeys).str());
-            std::cout << "EVENT_PUBKEYS: " << ser << std::endl;
-            write_event(evt_pubkeys, fp);
+                ser.clear();
+                ser = HexStr((std::stringstream() << evt_pubkeys).str());
+                std::cout << "EVENT_PUBKEYS: " << ser << std::endl;
+                write_event(evt_pubkeys, fp);
 
-            /* EVENT_NOTARIZED */
-            komodo::event_notarized evt_notarized(height, "KMD");
-            ser.clear();
-            evt_notarized.notarizedheight = 0x5;
-            for (int i = 0; i < 32; ++i) evt_notarized.blockhash.bytes[i] = 0x11;
-            for (int i = 0; i < 32; ++i) evt_notarized.desttxid.bytes[i] = 0x22;
-            for (int i = 0; i < 32; ++i) evt_notarized.MoM.bytes[i] = 0x33;
-            evt_notarized.MoMdepth = 0x4;
+                /* EVENT_NOTARIZED */
+                komodo::event_notarized evt_notarized(height, "KMD");
+                ser.clear();
+                evt_notarized.notarizedheight = 0x5;
+                for (int i = 0; i < 32; ++i) evt_notarized.blockhash.bytes[i] = 0x11;
+                for (int i = 0; i < 32; ++i) evt_notarized.desttxid.bytes[i] = 0x22;
+                for (int i = 0; i < 32; ++i) evt_notarized.MoM.bytes[i] = 0x33;
+                evt_notarized.MoMdepth = 0x4;
 
-            ser = HexStr((std::stringstream() << evt_notarized).str());
-            std::cout << "EVENT_NOTARIZED: " << ser << std::endl;
-            write_event(evt_notarized, fp);
+                ser = HexStr((std::stringstream() << evt_notarized).str());
+                std::cout << "EVENT_NOTARIZED: " << ser << std::endl;
+                write_event(evt_notarized, fp);
 
-            /* EVENT_U */
-            komodo::event_u evt_u(height);
-            ser.clear();
-            evt_u.n = 0xFF;
-            evt_u.nid = 0XFE;
-            for (int i=0; i<8; ++i) evt_u.mask[i] = 0x40 + i;
-            for (int i=0; i<32; ++i) evt_u.hash[i] = 0x50 + i;
+                /* EVENT_U */
+                komodo::event_u evt_u(height);
+                ser.clear();
+                evt_u.n = 0xFF;
+                evt_u.nid = 0XFE;
+                for (int i=0; i<8; ++i) evt_u.mask[i] = 0x40 + i;
+                for (int i=0; i<32; ++i) evt_u.hash[i] = 0x50 + i;
 
-            ser = HexStr((std::stringstream() << evt_u).str());
-            std::cout << "EVENT_U: " << ser << std::endl;
-            write_event(evt_u, fp);
+                ser = HexStr((std::stringstream() << evt_u).str());
+                std::cout << "EVENT_U: " << ser << std::endl;
+                write_event(evt_u, fp);
 
-            /* EVENT_KMDHEIGHT */
-            komodo::event_kmdheight evt_kmdheight(height);
-            ser.clear();
-            evt_kmdheight.kheight = 7777; // 0x77777777;
-            evt_kmdheight.timestamp = 8888; // 0x88888888;
+                /* EVENT_KMDHEIGHT */
+                komodo::event_kmdheight evt_kmdheight(height);
+                ser.clear();
+                evt_kmdheight.kheight = 7777; // 0x77777777;
+                evt_kmdheight.timestamp = 8888; // 0x88888888;
 
-            ser = HexStr((std::stringstream() << evt_kmdheight).str());
-            std::cout << "EVENT_KMDHEIGHT: " << ser << std::endl;
-            write_event(evt_kmdheight, fp);
+                ser = HexStr((std::stringstream() << evt_kmdheight).str());
+                std::cout << "EVENT_KMDHEIGHT: " << ser << std::endl;
+                write_event(evt_kmdheight, fp);
 
-            /* EVENT_OPRETURN */
-            /* EVENT_PRICEFEED */
-            /* EVENT_REWIND */
+                /* EVENT_OPRETURN */
+                komodo::event_opreturn evt_opreturn(height);
+                ser.clear();
+                for (int i=0; i<32; ++i) evt_opreturn.txid.bytes[i] = 0x10 + i;
+                evt_opreturn.vout = 0xaaaa;
+                evt_opreturn.value =0xbbbbbbbbbbbbbbbb;
+                // size in serialization - 2 bytes always, even if 0?
+                evt_opreturn.opret.clear();
+                evt_opreturn.opret.push_back('D');
+
+                ser = HexStr((std::stringstream() << evt_opreturn).str());
+                std::cout << "EVENT_OPRETURN: " << ser << std::endl;
+                write_event(evt_opreturn, fp);
+
+                /* EVENT_PRICEFEED */
+                /* EVENT_REWIND */
+            }
             fclose(fp);
         }
     }
