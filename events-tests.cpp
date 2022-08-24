@@ -818,11 +818,12 @@ namespace komodo {
 
     std::ostream& operator<<(std::ostream& os, const event_pubkeys& in)
     {
-        const event& e = dynamic_cast<const event&>(in);
+        const event& e = static_cast<const event&>(in);
         os << e;
         os << in.num;
-        for(uint8_t i = 0; i < in.num-1; ++i)
-            os << in.pubkeys[i];
+        for(uint8_t i = 0; i < in.num; ++i)
+            for(uint8_t j = 0; j < 33; ++j)
+                os << in.pubkeys[i][j];
         return os;
     }
 
@@ -1455,7 +1456,7 @@ struct notarized_checkpoint /* komodo_structs.h */
  * @param fp the file
  * @returns the number of bytes written
  */
-size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
+size_t write_event_mistake(std::shared_ptr<komodo::event> evt, FILE *fp)
 {
     std::stringstream ss;
     ss << evt;
@@ -1512,6 +1513,12 @@ int main() {
 
     struct events_new::komodo_state KOMODO_STATE_NEW;
     // memset(&KOMODO_STATE_NEW, 0, sizeof(KOMODO_STATE_NEW)); // we can't do such thing here, bcz we will damage std::list
+
+    // let's init important values (TODO: check that in original struct in daemon code we doing the same)
+    KOMODO_STATE_NEW.SAVEDHEIGHT = 0;
+    KOMODO_STATE_NEW.CURRENT_HEIGHT = 0;
+    KOMODO_STATE_NEW.SetLastNotarizedHeight(0);
+    KOMODO_STATE_NEW.SAVEDTIMESTAMP = 0;
 
     struct events_new::komodo_state *sp_new = &KOMODO_STATE_NEW;
 
@@ -1703,7 +1710,9 @@ int main() {
         fp = fopen("events.bin", "w+b");
         if (fp) {
             std::shared_ptr<komodo::event_notarized> p_ken3 = std::make_shared<komodo::event_notarized>(ken2);
+            // write_event_mistake(p_ken3, fp);
             write_event(*p_ken3, fp);
+
             // totally broken :(( all komodostate records are pointers representation in ASCII, instead of real data
             fclose(fp);
         }
@@ -1716,5 +1725,33 @@ int main() {
         assert(HexStr((std::stringstream() << komodo::serializable<int32_t>(a)).str()) == "30313233");
     }
 
+    /* writing all type of events to a separate file */
+    {
+        std::cout << std::endl;
+        int32_t height = 0x01020304; // 16909060
+        std::string ser;
+
+        FILE *fp;
+        fp = fopen("allevents.bin","w+b");
+        if (fp) {
+            /* EVENT_PUBKEYS */
+            komodo::event_pubkeys evt_pubkeys(height);
+            evt_pubkeys.num = 1;
+            for(int i = 0; i < 33; ++i) evt_pubkeys.pubkeys[0][i] = i;
+
+            ser.clear();
+            ser = HexStr((std::stringstream() << evt_pubkeys).str());
+            std::cout << "EVENT_PUBKEYS: " << ser << std::endl;
+            write_event(evt_pubkeys, fp);
+
+            /* EVENT_NOTARIZED */
+            /* EVENT_U */
+            /* EVENT_KMDHEIGHT */
+            /* EVENT_OPRETURN */
+            /* EVENT_PRICEFEED */
+            /* EVENT_REWIND */
+            fclose(fp);
+        }
+    }
     return 0;
 }
