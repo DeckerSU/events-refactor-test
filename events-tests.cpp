@@ -1650,8 +1650,9 @@ int main() {
     /* event_notarized tests #1 */
     {
         komodo::event_notarized ken1(0x04030201, "KMD");
-
-        std::cout << "ken1: '" << HexStr((std::stringstream() << ken1).str()) << "'" << std::endl;
+        std::string ser = HexStr((std::stringstream() << ken1).str());
+        std::cout << "ken1: '" << ser << "'" << std::endl;
+        assert(ser == "4e010203040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
 
         long pos = 0;
         uint8_t data[] = {
@@ -1661,12 +1662,17 @@ int main() {
         };
 
         komodo::event_notarized ken2(&data[0], pos, sizeof(data), 0x04030201, "KMD", false);
-        std::cout << "ken2: '" << HexStr((std::stringstream() << ken2).str()) << "'" << std::endl;
+        ser = HexStr((std::stringstream() << ken2).str());
+        std::cout << "ken2: '" << ser << "'" << std::endl;
+        assert(ser == "4e01020304c27f2e0008943e323422a1f85a7d524674967c0a2571d0b9fa0357e42b7f8397d7cf46b90000000000000000000000000000000000000000000000000000000000000000");
     }
 
+    /* small serialization test */
     {
         int32_t a = 0x33323130;
-        std::cout << "a: '" << komodo::serializable<int32_t>(a) << "'" << std::endl;
+        std::cout << "a: '" << komodo::serializable<int32_t>(a) << "' (" << HexStr((std::stringstream() << komodo::serializable<int32_t>(a)).str()) << ")" << std::endl;
+        assert(HexStr((std::stringstream() << komodo::serializable<int32_t>(a)).str()) == "30313233");
     }
+
     return 0;
 }
