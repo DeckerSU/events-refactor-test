@@ -537,10 +537,14 @@ namespace komodo {
 
     struct event_notarized : public event
     {
-        event_notarized() : event(komodo_event_type::EVENT_NOTARIZED, 0), notarizedheight(0), MoMdepth(0) {}
-        event_notarized(int32_t ht) : event(EVENT_NOTARIZED, ht), notarizedheight(0), MoMdepth(0) {}
-        event_notarized(uint8_t* data, long &pos, long data_len, int32_t height, bool includeMoM = false);
-        event_notarized(FILE* fp, int32_t ht, bool includeMoM = false);
+        event_notarized() : event(EVENT_NOTARIZED, 0), notarizedheight(0), MoMdepth(0) {
+            memset(this->dest, 0, sizeof(this->dest));
+        }
+        event_notarized(int32_t ht, const char* _dest) : event(EVENT_NOTARIZED, ht), notarizedheight(0), MoMdepth(0) {
+            strncpy(this->dest, _dest, sizeof(this->dest)-1); this->dest[sizeof(this->dest)-1] = 0;
+        }
+        event_notarized(uint8_t* data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM = false);
+        event_notarized(FILE* fp, int32_t ht, const char* _dest, bool includeMoM = false);
         uint256 blockhash;
         uint256 desttxid;
         uint256 MoM;
@@ -548,6 +552,8 @@ namespace komodo {
         int32_t MoMdepth;
         char dest[16];
     };
+
+    std::ostream& operator<<(std::ostream& os, const event_notarized& in);
 
     struct event_pubkeys : public event
     {
@@ -656,9 +662,11 @@ namespace komodo {
             throw parse_error("Illegal number of keys: " + std::to_string(num));
     }
 
-    event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, bool includeMoM)
-        : event(EVENT_NOTARIZED, height), MoMdepth(0)
+    event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM)
+            : event(EVENT_NOTARIZED, height), MoMdepth(0)
     {
+        strncpy(this->dest, _dest, sizeof(this->dest)-1);
+        this->dest[sizeof(this->dest)-1] = 0;
         MoM.SetNull();
         mem_read(this->notarizedheight, data, pos, data_len);
         mem_read(this->blockhash, data, pos, data_len);
@@ -670,9 +678,11 @@ namespace komodo {
         }
     }
 
-    event_notarized::event_notarized(FILE* fp, int32_t height, bool includeMoM)
+    event_notarized::event_notarized(FILE* fp, int32_t height, const char* _dest, bool includeMoM)
             : event(EVENT_NOTARIZED, height), MoMdepth(0)
     {
+        strncpy(this->dest, _dest, sizeof(this->dest)-1);
+        this->dest[sizeof(this->dest)-1] = 0;
         MoM.SetNull();
         if ( fread(&notarizedheight,1,sizeof(notarizedheight),fp) != sizeof(notarizedheight) )
             throw parse_error("Invalid notarization height");
@@ -689,6 +699,116 @@ namespace komodo {
         }
     }
 
+    /***
+     * Helps serialize integrals
+     */
+    template<class T>
+    class serializable
+    {
+    public:
+        serializable(const T& in) : value(in) {}
+        T value;
+    };
+
+    std::ostream& operator<<(std::ostream& os, serializable<int32_t> in)
+    {
+        os  << (uint8_t) (in.value & 0x000000ff)
+            << (uint8_t) ((in.value & 0x0000ff00) >> 8)
+            << (uint8_t) ((in.value & 0x00ff0000) >> 16)
+            << (uint8_t) ((in.value & 0xff000000) >> 24);
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, serializable<uint16_t> in)
+    {
+        os  << (uint8_t)  (in.value & 0x00ff)
+            << (uint8_t) ((in.value & 0xff00) >> 8);
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, serializable<uint256> in)
+    {
+        // in.value.Serialize(os);
+        os << "0x" << in.value.ToString();
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, serializable<uint64_t> in)
+    {
+        os  << (uint8_t)  (in.value & 0x00000000000000ff)
+            << (uint8_t) ((in.value & 0x000000000000ff00) >> 8)
+            << (uint8_t) ((in.value & 0x0000000000ff0000) >> 16)
+            << (uint8_t) ((in.value & 0x00000000ff000000) >> 24)
+            << (uint8_t) ((in.value & 0x000000ff00000000) >> 32)
+            << (uint8_t) ((in.value & 0x0000ff0000000000) >> 40)
+            << (uint8_t) ((in.value & 0x00ff000000000000) >> 48)
+            << (uint8_t) ((in.value & 0xff00000000000000) >> 56);
+        return os;
+    }
+
+    /****
+     * This serializes the 5 byte header of an event
+     * @param os the stream
+     * @param in the event
+     * @returns the stream
+     */
+    std::ostream& operator<<(std::ostream& os, const event& in)
+    {
+        switch (in.type)
+        {
+            case(EVENT_PUBKEYS):
+                os << "P";
+                break;
+            case(EVENT_NOTARIZED):
+            {
+                event_notarized* tmp = dynamic_cast<event_notarized*>(const_cast<event*>(&in));
+                if (tmp->MoMdepth == 0)
+                    os << "N";
+                else
+                    os << "M";
+                break;
+            }
+            case(EVENT_U):
+                os << "U";
+                break;
+            case(EVENT_KMDHEIGHT):
+            {
+                event_kmdheight* tmp = dynamic_cast<event_kmdheight*>(const_cast<event*>(&in));
+                if (tmp->timestamp == 0)
+                    os << "K";
+                else
+                    os << "T";
+                break;
+            }
+            case(EVENT_OPRETURN):
+                os << "R";
+                break;
+            case(EVENT_PRICEFEED):
+                os << "V";
+                break;
+            case(EVENT_REWIND):
+                os << "B";
+                break;
+        }
+        os << serializable<int32_t>(in.height);
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const event_notarized& in)
+    {
+        const event& e = dynamic_cast<const event&>(in);
+        os << e;
+
+        os << serializable<int32_t>(in.notarizedheight);
+        os << serializable<uint256>(in.blockhash);
+        os << serializable<uint256>(in.desttxid);
+        if (in.MoMdepth > 0)
+        {
+            os << serializable<uint256>(in.MoM);
+            os << serializable<int32_t>(in.MoMdepth);
+        }
+        return os;
+    }
     event_u::event_u(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_U, height)
     {
         mem_read(this->n, data, pos, data_len);
@@ -1271,7 +1391,7 @@ struct notarized_checkpoint /* komodo_structs.h */
                 }
                 else if ( func == 'N' || func == 'M' )
                 {
-                    std::shared_ptr<komodo::event_notarized> evt = std::make_shared<komodo::event_notarized>(fp, ht, func == 'M');
+                    std::shared_ptr<komodo::event_notarized> evt = std::make_shared<komodo::event_notarized>(fp, ht, dest, func == 'M');
                     komodo_eventadd_notarized(sp, symbol, ht, evt);
                 }
                 else if ( func == 'U' ) // deprecated
@@ -1520,6 +1640,17 @@ int main() {
         }
     }
     // here #510 bug exists as well, if num of read records < 64 (records with indexes higher than num remains unitialized)
+
+    /* event_notarized tests #1 */
+    {
+        komodo::event_notarized ken1(777, "KMD");
+        std::cout << ken1 << std::endl;
+        uint256 a;
+        a.SetNull();
+        a.bytes[0] = 1;
+        a.bytes[31] = 2;
+        std::cout << "0x" << a.ToString() << std::endl;
+    }
 
     return 0;
 }
