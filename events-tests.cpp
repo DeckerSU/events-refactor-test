@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 #include <mutex>
+#include <algorithm>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -1325,12 +1326,15 @@ size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
     return fwrite(buf.c_str(), buf.size(), 1, fp);
 }
 
-bool operator==(const komodo::event_pubkeys& lhs, const komodo::event_pubkeys& rhs) {
+bool operator==(const komodo::event_pubkeys &lhs, const komodo::event_pubkeys &rhs)
+{
     if (lhs.height != rhs.height ||
         lhs.num != rhs.num ||
         lhs.type != rhs.type)
         return false;
-    for (int i = 0; i < sizeof(komodo::event_pubkeys::pubkeys)/sizeof(komodo::event_pubkeys::pubkeys[0]); i++) {
+    const size_t maxsz = sizeof(komodo::event_pubkeys::pubkeys) / sizeof(komodo::event_pubkeys::pubkeys[0]);
+    for (int i = 0; i < std::min(static_cast<size_t>(lhs.num), maxsz); i++)
+    {
         if (memcmp(&lhs.pubkeys[i][0], &rhs.pubkeys[i][0], 33) != 0)
             return false;
     }
@@ -1493,6 +1497,7 @@ int main() {
             bool fEqual = *evt_data == kep;
             std::cout << "fEqual = " << (fEqual ? "true" : "false") << std::endl;
             // https://github.com/KomodoPlatform/komodo/pull/510 - reference to a bug with uninitialized pubkeys member.
+            assert(fEqual);
 
             fclose(fp);
         }
@@ -1500,16 +1505,22 @@ int main() {
 
     /* event_pubkeys tests #2 */
     {
-        /*  fp= fopen("events.bin","wb");
-         if (fp) {
+        fp = fopen("events.bin","wb");
+        if (fp) {
+            uint8_t data[1 + 64 * 33] = { 1 };
+            for (size_t i = 0; i < 64; i++)
+                memset(1 + &data[0] + i * 33, i, 33);
+            fwrite(data, sizeof(data), 1, fp);
+            fclose(fp);
 
-             uint8_t data[1 + 64 * 33] = { 1 };
-             for (size_t i = 0; i < 64; i++)
-                 memset(1 + &data[0] + i * 33, i, 33);
-             fwrite(data, sizeof(data), 1, fp);
-             fclose(fp);
-         } */
+            FILE *fp_read = fopen("events.bin","rb");
+            if (fp_read) {
+                komodo::event_pubkeys kep(fp_read, 1);
+                fclose(fp_read);
+            }
+        }
     }
+    // here #510 bug exists as well, if num of read records < 64 (records with indexes higher than num remains unitialized)
 
     return 0;
 }
