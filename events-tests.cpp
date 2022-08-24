@@ -535,6 +535,7 @@ namespace komodo {
         event_rewind(int32_t ht) : event(EVENT_REWIND, ht) {}
         event_rewind(uint8_t* data, long &pos, long data_len, int32_t height);
     };
+    std::ostream& operator<<(std::ostream& os, const event_rewind& in);
 
     struct event_notarized : public event
     {
@@ -860,6 +861,14 @@ namespace komodo {
         os.write( (const char*)in.opret.data(), in.opret.size());
         return os;
     }
+
+    std::ostream& operator<<(std::ostream& os, const event_rewind& in)
+    {
+        const event& e = dynamic_cast<const event&>(in);
+        os << e;
+        return os;
+    }
+
 
     event_u::event_u(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_U, height)
     {
@@ -1640,15 +1649,15 @@ int main() {
     assert(sp_old->NOTARIZED_DESTTXID.ToStringRev() == sp_new->LastNotarizedDestTxId().ToStringRev());
     std::cerr << sp_old->MoM.ToStringRev() << " - " << sp_new->LastNotarizedMoM().ToStringRev() << std::endl;
     assert(sp_old->MoM.ToStringRev() == sp_new->LastNotarizedMoM().ToStringRev());
-    std::cerr << sp_old->SAVEDHEIGHT << " - " << sp_new->SAVEDHEIGHT << std::endl;
+    std::cerr << "SAVEDHEIGHT: " << sp_old->SAVEDHEIGHT << " - " << sp_new->SAVEDHEIGHT << std::endl;
     assert(sp_old->SAVEDHEIGHT == sp_new->SAVEDHEIGHT);
-    std::cerr << sp_old->CURRENT_HEIGHT << " - " << sp_new->CURRENT_HEIGHT << std::endl;
+    std::cerr << "CURRENT_HEIGHT: " << sp_old->CURRENT_HEIGHT << " - " << sp_new->CURRENT_HEIGHT << std::endl;
     assert(sp_old->CURRENT_HEIGHT == sp_new->CURRENT_HEIGHT);
-    std::cerr << sp_old->NOTARIZED_HEIGHT << " - " << sp_new->LastNotarizedHeight() << std::endl;
+    std::cerr << "NOTARIZED_HEIGHT: " << sp_old->NOTARIZED_HEIGHT << " - " << sp_new->LastNotarizedHeight() << std::endl;
     assert(sp_old->NOTARIZED_HEIGHT == sp_new->LastNotarizedHeight());
-    std::cerr << sp_old->SAVEDTIMESTAMP << " - " << sp_new->SAVEDTIMESTAMP << std::endl;
+    std::cerr << "SAVEDTIMESTAMP: " << sp_old->SAVEDTIMESTAMP << " - " << sp_new->SAVEDTIMESTAMP << std::endl;
     assert(sp_old->SAVEDTIMESTAMP == sp_new->SAVEDTIMESTAMP);
-    std::cerr << sp_old->NUM_NPOINTS << " - " << sp_new->NumCheckpoints() << std::endl;
+    std::cerr << "NUM_NPOINTS: " << sp_old->NUM_NPOINTS << " - " << sp_new->NumCheckpoints() << std::endl;
     assert(sp_old->NUM_NPOINTS == sp_new->NumCheckpoints());
     // TODO: compare NPOINTS (!)
 
@@ -1768,7 +1777,7 @@ int main() {
         FILE *fp;
         fp = fopen("allevents.bin","w+b");
         if (fp) {
-            for (int repeats=0; repeats < 1; ++repeats)
+            for (int repeats=0; repeats < 2; ++repeats)
             {
                 /* EVENT_PUBKEYS */
                 komodo::event_pubkeys evt_pubkeys(height);
@@ -1830,7 +1839,15 @@ int main() {
                 write_event(evt_opreturn, fp);
 
                 /* EVENT_PRICEFEED */
+
                 /* EVENT_REWIND */
+                komodo::event_rewind evt_rewind(height);
+                ser.clear();
+
+                ser = HexStr((std::stringstream() << evt_rewind).str());
+                std::cout << "EVENT_REWIND: " << ser << std::endl;
+                write_event(evt_rewind, fp);
+
             }
             fclose(fp);
         }
