@@ -1745,6 +1745,18 @@ int main() {
             write_event(evt_pubkeys, fp);
 
             /* EVENT_NOTARIZED */
+            komodo::event_notarized evt_notarized(height, "KMD");
+            ser.clear();
+            evt_notarized.notarizedheight = 0x5;
+            for (int i = 0; i < 32; ++i) evt_notarized.blockhash.bytes[i] = 0x11;
+            for (int i = 0; i < 32; ++i) evt_notarized.desttxid.bytes[i] = 0x22;
+            for (int i = 0; i < 32; ++i) evt_notarized.MoM.bytes[i] = 0x33;
+            evt_notarized.MoMdepth = 0x4;
+
+            ser = HexStr((std::stringstream() << evt_notarized).str());
+            std::cout << "EVENT_NOTARIZED: " << ser << std::endl;
+            write_event(evt_notarized, fp);
+
             /* EVENT_U */
             /* EVENT_KMDHEIGHT */
             /* EVENT_OPRETURN */
