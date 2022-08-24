@@ -22,6 +22,7 @@
 #include "tinyformat.h"
 #include "mem_read.h"
 #include "events-tests.h"
+#include "utilstrencodings.h"
 
 #define portable_mutex_lock pthread_mutex_lock
 #define portable_mutex_unlock pthread_mutex_unlock
@@ -662,8 +663,11 @@ namespace komodo {
             throw parse_error("Illegal number of keys: " + std::to_string(num));
     }
 
-    event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM)
-            : event(EVENT_NOTARIZED, height), MoMdepth(0)
+    // event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM)
+    //         : event(EVENT_NOTARIZED, height), MoMdepth(0)
+    event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, 
+        const char* _dest, bool includeMoM)
+        : event_notarized(height, dest)
     {
         strncpy(this->dest, _dest, sizeof(this->dest)-1);
         this->dest[sizeof(this->dest)-1] = 0;
@@ -729,7 +733,9 @@ namespace komodo {
     std::ostream& operator<<(std::ostream& os, serializable<uint256> in)
     {
         // in.value.Serialize(os);
-        os << "0x" << in.value.ToString();
+        for (int i = 0; i < 32; ++i) {
+            os << in.value.bytes[i];
+        }
         return os;
     }
 
@@ -798,7 +804,6 @@ namespace komodo {
     {
         const event& e = dynamic_cast<const event&>(in);
         os << e;
-
         os << serializable<int32_t>(in.notarizedheight);
         os << serializable<uint256>(in.blockhash);
         os << serializable<uint256>(in.desttxid);
@@ -809,6 +814,7 @@ namespace komodo {
         }
         return os;
     }
+
     event_u::event_u(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_U, height)
     {
         mem_read(this->n, data, pos, data_len);
@@ -1643,14 +1649,24 @@ int main() {
 
     /* event_notarized tests #1 */
     {
-        komodo::event_notarized ken1(777, "KMD");
-        std::cout << ken1 << std::endl;
-        uint256 a;
-        a.SetNull();
-        a.bytes[0] = 1;
-        a.bytes[31] = 2;
-        std::cout << "0x" << a.ToString() << std::endl;
+        komodo::event_notarized ken1(0x04030201, "KMD");
+
+        std::cout << "ken1: '" << HexStr((std::stringstream() << ken1).str()) << "'" << std::endl;
+
+        long pos = 0;
+        uint8_t data[] = {
+            0xc2, 0x7f, 0x2e, 0x00, // notarizedheight = #3047362
+            0x08,0x94,0x3e,0x32,0x34,0x22,0xa1,0xf8,0x5a,0x7d,0x52,0x46,0x74,0x96,0x7c,0x0a,0x25,0x71,0xd0,0xb9,0xfa,0x03,0x57,0xe4,0x2b,0x7f,0x83,0x97,0xd7,0xcf,0x46,0xb9, // blockhash
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // desttxid
+        };
+
+        komodo::event_notarized ken2(&data[0], pos, sizeof(data), 0x04030201, "KMD", false);
+        std::cout << "ken2: '" << HexStr((std::stringstream() << ken2).str()) << "'" << std::endl;
     }
 
+    {
+        int32_t a = 0x33323130;
+        std::cout << "a: '" << komodo::serializable<int32_t>(a) << "'" << std::endl;
+    }
     return 0;
 }
