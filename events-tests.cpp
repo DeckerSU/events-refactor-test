@@ -866,6 +866,10 @@ namespace komodo {
     {
         const event& e = dynamic_cast<const event&>(in);
         os << e;
+
+        // rewind serialization shouldn't write anything to komodostate file,
+        // if we will uncomment lines above it will call common code for
+        // events header and will write 'B'height ...
         return os;
     }
 
@@ -1777,7 +1781,7 @@ int main() {
         FILE *fp;
         fp = fopen("allevents.bin","w+b");
         if (fp) {
-            for (int repeats=0; repeats < 2; ++repeats)
+            for (int repeats=0; repeats < 1; ++repeats)
             {
                 /* EVENT_PUBKEYS */
                 komodo::event_pubkeys evt_pubkeys(height);
@@ -1832,7 +1836,7 @@ int main() {
                 evt_opreturn.value =0xbbbbbbbbbbbbbbbb;
                 // size in serialization - 2 bytes always, even if 0?
                 evt_opreturn.opret.clear();
-                evt_opreturn.opret.push_back('D');
+                evt_opreturn.opret.push_back('!');
 
                 ser = HexStr((std::stringstream() << evt_opreturn).str());
                 std::cout << "EVENT_OPRETURN: " << ser << std::endl;
@@ -1847,6 +1851,11 @@ int main() {
                 ser = HexStr((std::stringstream() << evt_rewind).str());
                 std::cout << "EVENT_REWIND: " << ser << std::endl;
                 write_event(evt_rewind, fp);
+
+                /*
+                    komodo_stateupdate -> write_event (old: fputc(...))
+                    komodo_eventadd_kmdheight -> komodo_event_rewind
+                */
 
             }
             fclose(fp);
