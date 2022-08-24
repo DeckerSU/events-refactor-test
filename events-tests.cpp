@@ -1452,6 +1452,7 @@ size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
     return fwrite(buf.c_str(), buf.size(), 1, fp);
 }
 
+
 bool operator==(const komodo::event_pubkeys &lhs, const komodo::event_pubkeys &rhs)
 {
     if (lhs.height != rhs.height ||
@@ -1653,6 +1654,8 @@ int main() {
         std::string ser = HexStr((std::stringstream() << ken1).str());
         std::cout << "ken1: '" << ser << "'" << std::endl;
         assert(ser == "4e010203040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+        assert(strlen(ken1.dest) == 3);
+        assert(ken1.height == 0x04030201);
 
         long pos = 0;
         uint8_t data[] = {
@@ -1665,6 +1668,18 @@ int main() {
         ser = HexStr((std::stringstream() << ken2).str());
         std::cout << "ken2: '" << ser << "'" << std::endl;
         assert(ser == "4e01020304c27f2e0008943e323422a1f85a7d524674967c0a2571d0b9fa0357e42b7f8397d7cf46b90000000000000000000000000000000000000000000000000000000000000000");
+        assert(strlen(ken2.dest) == 3);
+        assert(ken2.height == 0x04030201);
+
+        // this serialization actually using in write_event
+        FILE *fp;
+        fp = fopen("events.bin", "w+b");
+        if (fp) {
+            std::shared_ptr<komodo::event_notarized> p_ken3 = std::make_shared<komodo::event_notarized>(ken2);
+            write_event(p_ken3, fp);
+            // totally broken :(( all komodostate records are pointers representation in ASCII, instead of real data
+            fclose(fp);
+        }
     }
 
     /* small serialization test */
