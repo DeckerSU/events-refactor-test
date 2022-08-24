@@ -613,6 +613,7 @@ namespace komodo {
         int32_t kheight = 0;
         uint32_t timestamp = 0;
     };
+    std::ostream& operator<<(std::ostream& os, const event_kmdheight& in);
 
     struct event_opreturn : public event
     {
@@ -835,6 +836,15 @@ namespace komodo {
         os << in.n << in.nid;
         os.write((const char*)in.mask, 8);
         os.write((const char*)in.hash, 32);
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const event_kmdheight& in)
+    {
+        const event& e = dynamic_cast<const event&>(in);
+        os << e << serializable<int32_t>(in.kheight);
+        if (in.timestamp > 0)
+            os << serializable<int32_t>(in.timestamp);
         return os;
     }
 
@@ -1781,6 +1791,15 @@ int main() {
             write_event(evt_u, fp);
 
             /* EVENT_KMDHEIGHT */
+            komodo::event_kmdheight evt_kmdheight(height);
+            ser.clear();
+            evt_kmdheight.kheight = 7777; // 0x77777777;
+            evt_kmdheight.timestamp = 8888; // 0x88888888;
+
+            ser = HexStr((std::stringstream() << evt_kmdheight).str());
+            std::cout << "EVENT_KMDHEIGHT: " << ser << std::endl;
+            write_event(evt_kmdheight, fp);
+
             /* EVENT_OPRETURN */
             /* EVENT_PRICEFEED */
             /* EVENT_REWIND */
