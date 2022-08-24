@@ -37,7 +37,7 @@ bool IS_KOMODO_NOTARY = false;
 
 union _bits256 {
 
-    uint8_t bytes[32]; uint16_t ushorts[16]; uint32_t uints[8]; uint64_t ulongs[4];
+    uint8_t bytes[32] = {}; uint16_t ushorts[16]; uint32_t uints[8]; uint64_t ulongs[4];
     uint64_t txid;
 
     std::string ToString() const
