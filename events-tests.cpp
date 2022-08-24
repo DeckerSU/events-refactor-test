@@ -602,6 +602,7 @@ namespace komodo {
         uint8_t mask[8];
         uint8_t hash[32];
     };
+    std::ostream& operator<<(std::ostream& os, const event_u& in);
 
     struct event_kmdheight : public event
     {
@@ -824,6 +825,16 @@ namespace komodo {
         for(uint8_t i = 0; i < in.num; ++i)
             for(uint8_t j = 0; j < 33; ++j)
                 os << in.pubkeys[i][j];
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const event_u& in)
+    {
+        const event& e = dynamic_cast<const event&>(in);
+        os << e;
+        os << in.n << in.nid;
+        os.write((const char*)in.mask, 8);
+        os.write((const char*)in.hash, 32);
         return os;
     }
 
@@ -1758,6 +1769,17 @@ int main() {
             write_event(evt_notarized, fp);
 
             /* EVENT_U */
+            komodo::event_u evt_u(height);
+            ser.clear();
+            evt_u.n = 0xFF;
+            evt_u.nid = 0XFE;
+            for (int i=0; i<8; ++i) evt_u.mask[i] = 0x40 + i;
+            for (int i=0; i<32; ++i) evt_u.hash[i] = 0x50 + i;
+
+            ser = HexStr((std::stringstream() << evt_u).str());
+            std::cout << "EVENT_U: " << ser << std::endl;
+            write_event(evt_u, fp);
+
             /* EVENT_KMDHEIGHT */
             /* EVENT_OPRETURN */
             /* EVENT_PRICEFEED */
