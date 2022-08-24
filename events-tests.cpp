@@ -580,6 +580,7 @@ namespace komodo {
         uint8_t num = 0;
         uint8_t pubkeys[64][33];
     };
+    std::ostream& operator<<(std::ostream& os, const event_pubkeys& in);
 
     // (???)
     struct event_u : public event
@@ -812,6 +813,16 @@ namespace komodo {
             os << serializable<uint256>(in.MoM);
             os << serializable<int32_t>(in.MoMdepth);
         }
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const event_pubkeys& in)
+    {
+        const event& e = dynamic_cast<const event&>(in);
+        os << e;
+        os << in.num;
+        for(uint8_t i = 0; i < in.num-1; ++i)
+            os << in.pubkeys[i];
         return os;
     }
 
@@ -1452,6 +1463,20 @@ size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
     return fwrite(buf.c_str(), buf.size(), 1, fp);
 }
 
+/***
+ * @brief persist event to file stream
+ * @param evt the event
+ * @param fp the file
+ * @returns the number of bytes written
+ */
+template<class T>
+size_t write_event(T& evt, FILE *fp)
+{
+    std::stringstream ss;
+    ss << evt;
+    std::string buf = ss.str();
+    return fwrite(buf.c_str(), buf.size(), 1, fp);
+}
 
 bool operator==(const komodo::event_pubkeys &lhs, const komodo::event_pubkeys &rhs)
 {
@@ -1596,14 +1621,15 @@ int main() {
             fseek(fp, 0, SEEK_END);
 
             std::shared_ptr<komodo::event_pubkeys> evt = std::make_shared<komodo::event_pubkeys>(1);
-            // evt->num = 2;
+            evt->num = 64;
             for (size_t i = 0; i < 64; i++)
             {
                 memset(&evt->pubkeys[i], i, 33);
             }
 
             /* error: write a pointer, like 0x10100a218, instead of object content */
-            write_event(evt, fp);
+            // write_event(evt, fp);
+            write_event(*evt, fp);
 
             // https://en.cppreference.com/w/c/language/array_initialization
             // https://stackoverflow.com/questions/38892455/initializing-an-array-of-zeroes
@@ -1668,6 +1694,7 @@ int main() {
         ser = HexStr((std::stringstream() << ken2).str());
         std::cout << "ken2: '" << ser << "'" << std::endl;
         assert(ser == "4e01020304c27f2e0008943e323422a1f85a7d524674967c0a2571d0b9fa0357e42b7f8397d7cf46b90000000000000000000000000000000000000000000000000000000000000000");
+        assert(ser.size() == 73 * 2);
         assert(strlen(ken2.dest) == 3);
         assert(ken2.height == 0x04030201);
 
@@ -1676,7 +1703,7 @@ int main() {
         fp = fopen("events.bin", "w+b");
         if (fp) {
             std::shared_ptr<komodo::event_notarized> p_ken3 = std::make_shared<komodo::event_notarized>(ken2);
-            write_event(p_ken3, fp);
+            write_event(*p_ken3, fp);
             // totally broken :(( all komodostate records are pointers representation in ASCII, instead of real data
             fclose(fp);
         }
