@@ -1,5 +1,7 @@
 /*
     g++ -std=c++11 -O0 -g events-tests.cpp -o events-tests
+
+    komodod -connect=127.0.0.1 -reindex -stopat=100000
 */
 
 #include <iostream>
@@ -14,6 +16,8 @@
 #include <vector>
 #include <mutex>
 #include <algorithm>
+
+#include <fstream>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -670,7 +674,7 @@ namespace komodo {
 
     // event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM)
     //         : event(EVENT_NOTARIZED, height), MoMdepth(0)
-    event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, 
+    event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height,
         const char* _dest, bool includeMoM)
         : event_notarized(height, dest)
     {
@@ -1861,5 +1865,96 @@ int main() {
             fclose(fp);
         }
     }
+
+    /*
+        // ...
+
+        write_event:
+
+        std::ofstream outfile("events-new.txt", std::ios::out | std::ios::app);
+        outfile << HexStr(ToByteVector(buf)) << std::endl;
+        // outfile.write((const char*)&vch[0], vch.size());
+        outfile.close();
+
+        // ...
+
+        fputc('T',fp);
+        if ( fwrite(&height,1,sizeof(height),fp) != sizeof(height) )
+            errs++;
+        if ( fwrite(&KMDheight,1,sizeof(KMDheight),fp) != sizeof(KMDheight) )
+            errs++;
+        if ( fwrite(&KMDtimestamp,1,sizeof(KMDtimestamp),fp) != sizeof(KMDtimestamp) )
+            errs++;
+
+        // ...
+
+        uint64_t height = 555;
+        std::ofstream outfile("events-old.txt", std::ios::out | std::ios::app);
+
+        std::stringstream ss;
+        ss.write("T",1);
+        ss.write((const char *)&height, sizeof(height));
+        outfile << HexStr(ss.str()) << std::endl;
+        // outfile.write((const char*)&vch[0], vch.size());
+        outfile.close();
+
+        // ...
+
+        CDataStream ss(SER_DISK, 0 /CLIENT_VERSION/);
+        ss << obj;
+        // ss << FLATDATA("DECKER"); // FLATDATA - arrays and PODs
+        std::cerr << HexStr(ss.begin(), ss.end(), true) << std::endl; // std::cerr << HexStr(ss.str()) << std::endl;
+
+        CDataStream ss1(SER_NETWORK, PROTOCOL_VERSION);
+        sd.Serialize(ss1); // call Serialize method of class
+        // std::cerr << HexStr(ss1.begin(), ss1.end(), true) << " (" << ss1.GetType() << ", " << ss1.GetVersion() << ")" << std::endl;
+
+    */
+
+    /*
+        5438d9010038d9010055a05b58
+        5439d9010039d901008da05b58
+        4d3ad901002ad90100fb48335c1efd838a27471ea8ae5039c4fddd16595d890830581167c8001800002d6e68d7d12ccac21ea945cfa455d83fecc274e9ee29d024f776774cc30234b4
+        543ad901003ad90100d0a05b58
+
+        0x4D (77) - M - komodo::event_notarized
+
+        4d - func
+        3ad90100 (121146) - ht
+        2ad90100 (121130) - notarized_height
+        fb48335c1efd838a27471ea8ae5039c4fddd16595d890830581167c800180000 - notarized_hash
+        2d6e68d7d12ccac21ea945cfa455d83fecc274e9ee29d024f776774cc30234b4 - notarized_desttxid
+        ? = MoM (uint256)
+        ? = MoMdepth (int32_t)
+
+        MoMdepth < 0 - header will be serialized with M (as MoMdepth != 0),
+        but additional fields MoM and MoMdepth will not be written.
+
+        -- header
+        if (tmp->MoMdepth == 0)
+                os << "N";
+            else
+                os << "M";
+            break;
+        -- event_notarized
+        if (in.MoMdepth > 0)
+        {
+            os << serializable<uint256>(in.MoM);
+            os << serializable<int32_t>(in.MoMdepth);
+        }
+
+        Old code (stateupdate/write):
+
+        if ( sp->MoMdepth != 0 && sp->MoM != zero )
+            fputc('M',fp) else fputc('N',fp);
+        if ( sp->MoMdepth != 0 && sp->MoM != zero )
+        { write MoM and MoMdepths}
+
+        Old code (parsestatefile/read):
+        M - always read MoM and MoMdepths
+
+
+
+    */
     return 0;
 }
