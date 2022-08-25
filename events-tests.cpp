@@ -769,6 +769,7 @@ namespace komodo {
      */
     std::ostream& operator<<(std::ostream& os, const event& in)
     {
+        static uint256 zero;
         switch (in.type)
         {
             case(EVENT_PUBKEYS):
@@ -777,10 +778,10 @@ namespace komodo {
             case(EVENT_NOTARIZED):
             {
                 event_notarized* tmp = dynamic_cast<event_notarized*>(const_cast<event*>(&in));
-                if (tmp->MoMdepth == 0)
-                    os << "N";
-                else
+                if (tmp->MoMdepth != 0 && tmp->MoM != zero)
                     os << "M";
+                else
+                    os << "N";
                 break;
             }
             case(EVENT_U):
@@ -811,12 +812,13 @@ namespace komodo {
 
     std::ostream& operator<<(std::ostream& os, const event_notarized& in)
     {
+        static uint256 zero;
         const event& e = dynamic_cast<const event&>(in);
         os << e;
         os << serializable<int32_t>(in.notarizedheight);
         os << serializable<uint256>(in.blockhash);
         os << serializable<uint256>(in.desttxid);
-        if (in.MoMdepth > 0)
+        if (in.MoMdepth != 0 && in.MoM != zero)
         {
             os << serializable<uint256>(in.MoM);
             os << serializable<int32_t>(in.MoMdepth);
@@ -1785,6 +1787,36 @@ int main() {
         FILE *fp;
         fp = fopen("allevents.bin","w+b");
         if (fp) {
+
+            {
+                /*
+                    3ad90100 (121146) - ht
+                    2ad90100 (121130) - notarized_height
+                    fb48335c1efd838a27471ea8ae5039c4fddd16595d890830581167c800180000 - notarized_hash
+                    2d6e68d7d12ccac21ea945cfa455d83fecc274e9ee29d024f776774cc30234b4 - notarized_desttxid
+                    41749e728b6d568e6f52234acbb5e636d288bf1a278f654c2507ac2e817415c1 - MoM
+                    b30200f8 - MoMdepth
+                */
+
+                uint8_t notarized_hash_u8[] = { 0xfb,0x48,0x33,0x5c,0x1e,0xfd,0x83,0x8a,0x27,0x47,0x1e,0xa8,0xae,0x50,0x39,0xc4,0xfd,0xdd,0x16,0x59,0x5d,0x89,0x08,0x30,0x58,0x11,0x67,0xc8,0x00,0x18,0x00,0x00 };
+                uint8_t desttxid_u8[]       = { 0x2d,0x6e,0x68,0xd7,0xd1,0x2c,0xca,0xc2,0x1e,0xa9,0x45,0xcf,0xa4,0x55,0xd8,0x3f,0xec,0xc2,0x74,0xe9,0xee,0x29,0xd0,0x24,0xf7,0x76,0x77,0x4c,0xc3,0x02,0x34,0xb4 };
+                uint8_t MoM_u8[]            = { 0x41,0x74,0x9e,0x72,0x8b,0x6d,0x56,0x8e,0x6f,0x52,0x23,0x4a,0xcb,0xb5,0xe6,0x36,0xd2,0x88,0xbf,0x1a,0x27,0x8f,0x65,0x4c,0x25,0x07,0xac,0x2e,0x81,0x74,0x15,0xc1 };
+
+                /* EVENT_NOTARIZED with negative MoMdepth */
+                komodo::event_notarized evt_notarized(121146 /*ht*/, "KMD");
+                ser.clear();
+                evt_notarized.notarizedheight = 121130;
+                std::copy(notarized_hash_u8, notarized_hash_u8 + 32, evt_notarized.blockhash.bytes);
+                std::copy(desttxid_u8, desttxid_u8 + 32, evt_notarized.desttxid.bytes);
+                std::copy(MoM_u8, MoM_u8 + 32, evt_notarized.MoM.bytes);
+                evt_notarized.MoMdepth = 0xf80002b3; /* negative */
+
+                ser = HexStr((std::stringstream() << evt_notarized).str());
+                std::cout << "EVENT_NOTARIZED: " << ser << std::endl;
+                write_event(evt_notarized, fp);
+                assert(ser == "4d3ad901002ad90100fb48335c1efd838a27471ea8ae5039c4fddd16595d890830581167c8001800002d6e68d7d12ccac21ea945cfa455d83fecc274e9ee29d024f776774cc30234b441749e728b6d568e6f52234acbb5e636d288bf1a278f654c2507ac2e817415c1b30200f8");
+            }
+
             for (int repeats=0; repeats < 1; ++repeats)
             {
                 /* EVENT_PUBKEYS */
@@ -1952,8 +1984,6 @@ int main() {
 
         Old code (parsestatefile/read):
         M - always read MoM and MoMdepths
-
-
 
     */
     return 0;
